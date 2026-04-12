@@ -1,0 +1,14 @@
+[Unit]
+Description=Libre Hardware Monitor companion (Linux sensor bridge)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/lhm-companion
+Restart=on-failure
+RestartSec=5s
+# Run as dedicated user if created: User=lhm-companion
+# Optional: expose on non-default port
+# Environment=LHM_PORT=8085
+
+[Install]
+WantedBy=multi-user.target

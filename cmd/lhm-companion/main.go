@@ -1,0 +1,63 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/moeilijk/lhm-companion/internal/hwmon"
+	"github.com/moeilijk/lhm-companion/internal/nvidia"
+	"github.com/moeilijk/lhm-companion/internal/server"
+)
+
+var version = "dev"
+
+func main() {
+	var (
+		port      = flag.Int("port", envInt("LHM_PORT", 8085), "port to listen on")
+		withNv    = flag.Bool("nvidia", nvidia.Available(), "include nvidia-smi GPU readings")
+		showVer   = flag.Bool("version", false, "print version and exit")
+	)
+	flag.Parse()
+
+	if *showVer {
+		fmt.Println(version)
+		os.Exit(0)
+	}
+
+	if *withNv && !nvidia.Available() {
+		log.Println("warning: --nvidia specified but nvidia-smi not found")
+		*withNv = false
+	}
+
+	provide := func() server.Node {
+		children := hwmon.ReadAll()
+		if *withNv {
+			children = append(children, nvidia.ReadAll()...)
+		}
+		return server.Node{
+			Text:     hwmon.Hostname(),
+			Children: children,
+		}
+	}
+
+	addr := fmt.Sprintf(":%d", *port)
+	log.Printf("lhm-companion %s listening on %s", version, addr)
+	if err := http.ListenAndServe(addr, server.New(provide)); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func envInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	var n int
+	if _, err := fmt.Sscan(v, &n); err != nil {
+		return def
+	}
+	return n
+}
