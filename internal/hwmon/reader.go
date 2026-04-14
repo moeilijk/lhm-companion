@@ -46,10 +46,16 @@ func track(id string, val float64) (min, max float64) {
 }
 
 // ReadAll reads all hwmon devices and returns a tree of sensor nodes.
-func ReadAll() []server.Node {
+// Names listed in skip are excluded (e.g. "nvidia" when nvidia-smi is used).
+func ReadAll(skip ...string) []server.Node {
 	entries, err := os.ReadDir(sysfsBase)
 	if err != nil {
 		return nil
+	}
+
+	skipSet := make(map[string]bool, len(skip))
+	for _, s := range skip {
+		skipSet[s] = true
 	}
 
 	var nodes []server.Node
@@ -58,7 +64,7 @@ func ReadAll() []server.Node {
 			continue
 		}
 		dir := filepath.Join(sysfsBase, e.Name())
-		n := readDevice(dir, e.Name())
+		n := readDevice(dir, e.Name(), skipSet)
 		if n != nil {
 			nodes = append(nodes, *n)
 		}
@@ -66,10 +72,23 @@ func ReadAll() []server.Node {
 	return nodes
 }
 
-func readDevice(dir, hwmonName string) *server.Node {
+// groupImageURL maps sensor group names to their LHM icon paths.
+var groupImageURL = map[string]string{
+	"Temperatures": "images_icon/temperature.png",
+	"Fans":         "images_icon/fan.png",
+	"Voltages":     "images_icon/voltage.png",
+	"Powers":       "images_icon/power.png",
+	"Currents":     "images_icon/power.png",
+	"Clocks":       "images_icon/clock.png",
+}
+
+func readDevice(dir, hwmonName string, skip map[string]bool) *server.Node {
 	name := readFile(filepath.Join(dir, "name"))
 	if name == "" {
 		name = hwmonName
+	}
+	if skip[name] {
+		return nil
 	}
 
 	groups := map[string][]server.Node{}
@@ -88,9 +107,11 @@ func readDevice(dir, hwmonName string) *server.Node {
 	groupOrder := []string{"Temperature", "Fan", "Voltage", "Power", "Current", "Clock"}
 	var children []server.Node
 	for _, g := range groupOrder {
+		plural := g + "s"
 		if readings, ok := groups[g]; ok {
 			children = append(children, server.Node{
-				Text:     g + "s",
+				Text:     plural,
+				ImageURL: groupImageURL[plural],
 				Children: readings,
 			})
 		}
@@ -98,6 +119,7 @@ func readDevice(dir, hwmonName string) *server.Node {
 
 	return &server.Node{
 		Text:     name,
+		ImageURL: "images_icon/chip.png",
 		Children: children,
 	}
 }
@@ -140,17 +162,18 @@ func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, g
 			maxStr = formatVal(tMax, unit)
 		}
 
-		// SensorId leaf format: /<hwmon>/<type>/<idx>/0
-		// Service.sensorIDFromReading strips last 2 parts → /<hwmon>/<type>/<idx>
-		leafId := sensorId + "/0"
-
+		valStr := formatVal(val, unit)
 		groups[typeName] = append(groups[typeName], server.Node{
 			Text:     label,
-			Value:    formatVal(val, unit),
+			Value:    valStr,
 			Min:      minStr,
 			Max:      maxStr,
-			SensorId: leafId,
+			SensorId: sensorId,
 			Type:     typeName,
+			RawValue: valStr,
+			RawMin:   minStr,
+			RawMax:   maxStr,
+			ImageURL: "images/transparent.png",
 		})
 	}
 }
@@ -175,13 +198,20 @@ func addFreqReadings(dir, hwmonName string, groups map[string][]server.Node) {
 		sensorId := fmt.Sprintf("/%s/clock/%s", hwmonName, idx)
 		tMin, tMax := track(sensorId, val)
 
+		valStr := formatVal(val, "MHz")
+		minStr := formatVal(tMin, "MHz")
+		maxStr := formatVal(tMax, "MHz")
 		groups["Clock"] = append(groups["Clock"], server.Node{
 			Text:     label,
-			Value:    formatVal(val, "MHz"),
-			Min:      formatVal(tMin, "MHz"),
-			Max:      formatVal(tMax, "MHz"),
-			SensorId: sensorId + "/0",
+			Value:    valStr,
+			Min:      minStr,
+			Max:      maxStr,
+			SensorId: sensorId,
 			Type:     "Clock",
+			RawValue: valStr,
+			RawMin:   minStr,
+			RawMax:   maxStr,
+			ImageURL: "images/transparent.png",
 		})
 	}
 }

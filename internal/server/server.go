@@ -20,11 +20,28 @@ func New(provide Provider) http.Handler {
 		http.Redirect(w, r, "/data.json", http.StatusTemporaryRedirect)
 	})
 	mux.HandleFunc("/data.json", func(w http.ResponseWriter, r *http.Request) {
-		root := provide()
+		computer := provide()
+		root := Node{
+			Text:  "Sensor",
+			Min:   "Min",
+			Value: "Value",
+			Max:   "Max",
+			Children: []Node{computer},
+		}
+		counter := 0
+		assignIDs(&root, &counter)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(root); err != nil {
 			log.Printf("encode: %v", err)
 		}
 	})
 	return mux
+}
+
+func assignIDs(n *Node, counter *int) {
+	n.ID = *counter
+	*counter++
+	for i := range n.Children {
+		assignIDs(&n.Children[i], counter)
+	}
 }

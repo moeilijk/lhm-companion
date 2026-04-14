@@ -35,12 +35,22 @@ func main() {
 
 	provide := func() server.Node {
 		children := system.ReadAll()
-		children = append(children, hwmon.ReadAll()...)
+
+		// Skip the "nvidia" hwmon device when nvidia-smi is active to avoid
+		// duplicate GPU temperature readings.
+		var hwmonSkip []string
+		if *withNv {
+			hwmonSkip = []string{"nvidia"}
+		}
+		children = append(children, hwmon.ReadAll(hwmonSkip...)...)
+
 		if *withNv {
 			children = append(children, nvidia.ReadAll()...)
 		}
+
 		return server.Node{
 			Text:     hwmon.Hostname(),
+			ImageURL: "images_icon/computer.png",
 			Children: children,
 		}
 	}

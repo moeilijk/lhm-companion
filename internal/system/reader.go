@@ -97,18 +97,21 @@ func readCPU() *server.Node {
 	if len(loadNodes) > 0 {
 		children = append(children, server.Node{
 			Text:     "Load",
+			ImageURL: "images_icon/load.png",
 			Children: loadNodes,
 		})
 	}
 	if len(clockNodes) > 0 {
 		children = append(children, server.Node{
 			Text:     "Clocks",
+			ImageURL: "images_icon/clock.png",
 			Children: clockNodes,
 		})
 	}
 
 	return &server.Node{
 		Text:     "CPU",
+		ImageURL: "images_icon/cpu.png",
 		Children: children,
 	}
 }
@@ -129,19 +132,20 @@ func readMemory() *server.Node {
 	loadPct := percent(float64(used), float64(total))
 	loadMin, loadMax := trackValue("/memory/load/0", loadPct)
 
-	loadNodes := []server.Node{{
-		Text:     "Memory",
-		Value:    formatValue(loadPct, "%"),
-		Min:      formatValue(loadMin, "%"),
-		Max:      formatValue(loadMax, "%"),
-		SensorId: "/memory/load/0/0",
-		Type:     "Load",
-	}}
+	loadNodes := []server.Node{
+		loadNode("/memory/load/0", "Memory", loadPct, "/memory/load/0"),
+	}
+	// Override SensorId since loadNode generates it internally
+	loadNodes[0].SensorId = "/memory/load/0"
+	loadNodes[0].Min = formatValue(loadMin, "%")
+	loadNodes[0].Max = formatValue(loadMax, "%")
+	loadNodes[0].RawMin = loadNodes[0].Min
+	loadNodes[0].RawMax = loadNodes[0].Max
 
 	dataNodes := []server.Node{
-		dataNode("/memory/data/used", "Used Memory", float64(used), "/memory/data/0/0"),
-		dataNode("/memory/data/available", "Available Memory", float64(available), "/memory/data/1/0"),
-		dataNode("/memory/data/total", "Total Memory", float64(total), "/memory/data/2/0"),
+		dataNode("/memory/data/0", "Used Memory", float64(used), "/memory/data/0"),
+		dataNode("/memory/data/1", "Available Memory", float64(available), "/memory/data/1"),
+		dataNode("/memory/data/2", "Total Memory", float64(total), "/memory/data/2"),
 	}
 
 	swapTotal := mem["SwapTotal"] * 1024
@@ -150,25 +154,31 @@ func readMemory() *server.Node {
 		swapUsed := swapTotal - minUint64(swapTotal, swapFree)
 		swapLoad := percent(float64(swapUsed), float64(swapTotal))
 		swapMin, swapMax := trackValue("/memory/load/swap", swapLoad)
+		swapValStr := formatValue(swapLoad, "%")
 		loadNodes = append(loadNodes, server.Node{
 			Text:     "Swap",
-			Value:    formatValue(swapLoad, "%"),
+			Value:    swapValStr,
 			Min:      formatValue(swapMin, "%"),
 			Max:      formatValue(swapMax, "%"),
-			SensorId: "/memory/load/1/0",
+			SensorId: "/memory/load/1",
 			Type:     "Load",
+			RawValue: swapValStr,
+			RawMin:   formatValue(swapMin, "%"),
+			RawMax:   formatValue(swapMax, "%"),
+			ImageURL: "images/transparent.png",
 		})
 		dataNodes = append(dataNodes,
-			dataNode("/memory/data/swap-used", "Used Swap", float64(swapUsed), "/memory/data/3/0"),
-			dataNode("/memory/data/swap-total", "Total Swap", float64(swapTotal), "/memory/data/4/0"),
+			dataNode("/memory/data/3", "Used Swap", float64(swapUsed), "/memory/data/3"),
+			dataNode("/memory/data/4", "Total Swap", float64(swapTotal), "/memory/data/4"),
 		)
 	}
 
 	return &server.Node{
-		Text: "Memory",
+		Text:     "Memory",
+		ImageURL: "images_icon/ram.png",
 		Children: []server.Node{
-			{Text: "Load", Children: loadNodes},
-			{Text: "Data", Children: dataNodes},
+			{Text: "Load", ImageURL: "images_icon/load.png", Children: loadNodes},
+			{Text: "Data", ImageURL: "images_icon/power.png", Children: dataNodes},
 		},
 	}
 }
@@ -200,31 +210,33 @@ func readNetwork() *server.Node {
 		var children []server.Node
 
 		throughputNodes := []server.Node{
-			throughputNode("/network/"+name+"/throughput/rx", "Receive", rxRate, "/network/"+name+"/throughput/0/0"),
-			throughputNode("/network/"+name+"/throughput/tx", "Transmit", txRate, "/network/"+name+"/throughput/1/0"),
+			throughputNode("/network/"+name+"/throughput/rx", "Receive", rxRate, "/network/"+name+"/throughput/0"),
+			throughputNode("/network/"+name+"/throughput/tx", "Transmit", txRate, "/network/"+name+"/throughput/1"),
 		}
-		children = append(children, server.Node{Text: "Throughput", Children: throughputNodes})
+		children = append(children, server.Node{Text: "Throughput", ImageURL: "images_icon/throughput.png", Children: throughputNodes})
 
 		dataNodes := []server.Node{
-			dataNode("/network/"+name+"/data/rx", "Received Total", float64(rx), "/network/"+name+"/data/0/0"),
-			dataNode("/network/"+name+"/data/tx", "Transmitted Total", float64(tx), "/network/"+name+"/data/1/0"),
+			dataNode("/network/"+name+"/data/rx", "Received Total", float64(rx), "/network/"+name+"/data/0"),
+			dataNode("/network/"+name+"/data/tx", "Transmitted Total", float64(tx), "/network/"+name+"/data/1"),
 		}
-		children = append(children, server.Node{Text: "Data", Children: dataNodes})
+		children = append(children, server.Node{Text: "Data", ImageURL: "images_icon/power.png", Children: dataNodes})
 
 		if speed := readUint64(filepath.Join(dir, "speed")); speed != invalidUint64 && speed > 0 {
 			rxLoad := percent(rxRate*8, float64(speed)*1e6)
 			txLoad := percent(txRate*8, float64(speed)*1e6)
 			children = append(children, server.Node{
-				Text: "Load",
+				Text:     "Load",
+				ImageURL: "images_icon/load.png",
 				Children: []server.Node{
-					loadNode("/network/"+name+"/load/rx", "Receive", rxLoad, "/network/"+name+"/load/0/0"),
-					loadNode("/network/"+name+"/load/tx", "Transmit", txLoad, "/network/"+name+"/load/1/0"),
+					loadNode("/network/"+name+"/load/rx", "Receive", rxLoad, "/network/"+name+"/load/0"),
+					loadNode("/network/"+name+"/load/tx", "Transmit", txLoad, "/network/"+name+"/load/1"),
 				},
 			})
 		}
 
 		ifaces = append(ifaces, server.Node{
 			Text:     name,
+			ImageURL: "images_icon/nic.png",
 			Children: children,
 		})
 	}
@@ -235,6 +247,7 @@ func readNetwork() *server.Node {
 
 	return &server.Node{
 		Text:     "Network",
+		ImageURL: "images_icon/nic.png",
 		Children: ifaces,
 	}
 }
@@ -275,29 +288,33 @@ func readStorage() *server.Node {
 
 		children := []server.Node{
 			{
-				Text: "Throughput",
+				Text:     "Throughput",
+				ImageURL: "images_icon/throughput.png",
 				Children: []server.Node{
-					throughputNode("/storage/"+name+"/throughput/read", "Read", readRate, "/storage/"+name+"/throughput/0/0"),
-					throughputNode("/storage/"+name+"/throughput/write", "Write", writeRate, "/storage/"+name+"/throughput/1/0"),
+					throughputNode("/storage/"+name+"/throughput/read", "Read", readRate, "/storage/"+name+"/throughput/0"),
+					throughputNode("/storage/"+name+"/throughput/write", "Write", writeRate, "/storage/"+name+"/throughput/1"),
 				},
 			},
 			{
-				Text: "Load",
+				Text:     "Load",
+				ImageURL: "images_icon/load.png",
 				Children: []server.Node{
-					loadNode("/storage/"+name+"/load/activity", "Activity", busy, "/storage/"+name+"/load/0/0"),
+					loadNode("/storage/"+name+"/load/activity", "Activity", busy, "/storage/"+name+"/load/0"),
 				},
 			},
 			{
-				Text: "Data",
+				Text:     "Data",
+				ImageURL: "images_icon/power.png",
 				Children: []server.Node{
-					dataNode("/storage/"+name+"/data/read", "Read Total", float64(readBytes), "/storage/"+name+"/data/0/0"),
-					dataNode("/storage/"+name+"/data/write", "Write Total", float64(writeBytes), "/storage/"+name+"/data/1/0"),
+					dataNode("/storage/"+name+"/data/read", "Read Total", float64(readBytes), "/storage/"+name+"/data/0"),
+					dataNode("/storage/"+name+"/data/write", "Write Total", float64(writeBytes), "/storage/"+name+"/data/1"),
 				},
 			},
 		}
 
 		devices = append(devices, server.Node{
 			Text:     label,
+			ImageURL: "images_icon/hdd.png",
 			Children: children,
 		})
 	}
@@ -308,6 +325,7 @@ func readStorage() *server.Node {
 
 	return &server.Node{
 		Text:     "Storage",
+		ImageURL: "images_icon/hdd.png",
 		Children: devices,
 	}
 }
@@ -386,13 +404,21 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 			idKey = "core" + core
 		}
 		min, max := trackValue("/cpu/load/"+idKey, usage)
+		sensorId := fmt.Sprintf("/cpu/load/%d", idx)
+		valStr := formatValue(usage, "%")
+		minStr := formatValue(min, "%")
+		maxStr := formatValue(max, "%")
 		nodes = append(nodes, server.Node{
 			Text:     label,
-			Value:    formatValue(usage, "%"),
-			Min:      formatValue(min, "%"),
-			Max:      formatValue(max, "%"),
-			SensorId: fmt.Sprintf("/cpu/load/%d/0", idx),
+			Value:    valStr,
+			Min:      minStr,
+			Max:      maxStr,
+			SensorId: sensorId,
 			Type:     "Load",
+			RawValue: valStr,
+			RawMin:   minStr,
+			RawMax:   maxStr,
+			ImageURL: "images/transparent.png",
 		})
 	}
 	return nodes
@@ -412,13 +438,21 @@ func readCPUClockNodes() []server.Node {
 		core := cpuIndex(filepath.Dir(filepath.Dir(file)))
 		value := float64(raw) / 1000.0
 		min, max := trackValue(fmt.Sprintf("/cpu/clock/core%d", core), value)
+		sensorId := fmt.Sprintf("/cpu/clock/%d", idx)
+		valStr := formatValue(value, "MHz")
+		minStr := formatValue(min, "MHz")
+		maxStr := formatValue(max, "MHz")
 		nodes = append(nodes, server.Node{
 			Text:     fmt.Sprintf("Core %d", core),
-			Value:    formatValue(value, "MHz"),
-			Min:      formatValue(min, "MHz"),
-			Max:      formatValue(max, "MHz"),
-			SensorId: fmt.Sprintf("/cpu/clock/%d/0", idx),
+			Value:    valStr,
+			Min:      minStr,
+			Max:      maxStr,
+			SensorId: sensorId,
 			Type:     "Clock",
+			RawValue: valStr,
+			RawMin:   minStr,
+			RawMax:   maxStr,
+			ImageURL: "images/transparent.png",
 		})
 	}
 	return nodes
@@ -514,37 +548,58 @@ func storageRates(name string, readBytes, writeBytes, ioMillis uint64, currentTi
 
 func loadNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
+	valStr := formatValue(value, "%")
+	minStr := formatValue(min, "%")
+	maxStr := formatValue(max, "%")
 	return server.Node{
 		Text:     label,
-		Value:    formatValue(value, "%"),
-		Min:      formatValue(min, "%"),
-		Max:      formatValue(max, "%"),
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
 		SensorId: sensorID,
 		Type:     "Load",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
 	}
 }
 
 func throughputNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
+	valStr := formatBytes(value, true)
+	minStr := formatBytes(min, true)
+	maxStr := formatBytes(max, true)
 	return server.Node{
 		Text:     label,
-		Value:    formatBytes(value, true),
-		Min:      formatBytes(min, true),
-		Max:      formatBytes(max, true),
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
 		SensorId: sensorID,
 		Type:     "Throughput",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
 	}
 }
 
 func dataNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
+	valStr := formatBytes(value, false)
+	minStr := formatBytes(min, false)
+	maxStr := formatBytes(max, false)
 	return server.Node{
 		Text:     label,
-		Value:    formatBytes(value, false),
-		Min:      formatBytes(min, false),
-		Max:      formatBytes(max, false),
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
 		SensorId: sensorID,
 		Type:     "Data",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
 	}
 }
 
