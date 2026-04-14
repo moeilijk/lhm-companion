@@ -21,13 +21,12 @@ The Stream Deck plugin's `lhm-bridge.exe` reads `http://host:port/data.json`. lh
 
 ```sh
 curl -fsSL https://github.com/moeilijk/lhm-companion/releases/latest/download/install.sh | sudo sh
-sudo systemctl enable --now lhm-companion
 ```
 
 To pin a specific version, use:
 
 ```sh
-curl -fsSL https://github.com/moeilijk/lhm-companion/releases/download/v0.1.0/install.sh | sudo env VERSION=v0.1.0 sh
+curl -fsSL https://github.com/moeilijk/lhm-companion/releases/download/v0.1.2/install.sh | sudo env VERSION=v0.1.2 sh
 ```
 
 ### Source install (Go required)

@@ -88,6 +88,8 @@ tar -C "$tmpdir" --no-same-owner --strip-components=1 -xzf "$archive"
 install -Dm755 "$tmpdir/$BINARY" "$BIN_DIR/$BINARY"
 install -Dm644 "$tmpdir/$BINARY.service" "$UNIT_DIR/$BINARY.service"
 "$SYSTEMCTL" daemon-reload
+"$SYSTEMCTL" enable --now "$BINARY.service"
 
 echo "Installed $BINARY to $BIN_DIR/$BINARY"
 echo "Installed systemd unit to $UNIT_DIR/$BINARY.service"
+echo "Enabled and started $BINARY.service"
