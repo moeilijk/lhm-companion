@@ -26,7 +26,7 @@ curl -fsSL https://github.com/moeilijk/lhm-companion/releases/latest/download/in
 To pin a specific version, use:
 
 ```sh
-curl -fsSL https://github.com/moeilijk/lhm-companion/releases/download/v0.1.2/install.sh | sudo env VERSION=v0.1.2 sh
+curl -fsSL https://github.com/moeilijk/lhm-companion/releases/download/v0.1.4/install.sh | sudo env VERSION=v0.1.4 sh
 ```
 
 ### Source install (Go required)
@@ -36,6 +36,12 @@ git clone https://github.com/moeilijk/lhm-companion
 cd lhm-companion
 make build
 sudo make install
+```
+
+## Uninstall
+
+```sh
+curl -fsSL https://github.com/moeilijk/lhm-companion/releases/latest/download/uninstall.sh | sudo sh
 ```
 
 ## Usage

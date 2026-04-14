@@ -30,3 +30,4 @@ jobs:
             dist/lhm-companion_linux_amd64.tar.gz
             dist/lhm-companion_linux_amd64.tar.gz.sha256
             install.sh
+            uninstall.sh
