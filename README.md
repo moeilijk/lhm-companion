@@ -11,30 +11,26 @@ The Stream Deck plugin's `lhm-bridge.exe` reads `http://host:port/data.json`. lh
 ## Requirements
 
 - Linux with `/sys/class/hwmon` (kernel ≥ 4.x — any modern distro)
-- Go 1.22+ (to build from source)
+- Go 1.22+ (source builds only)
 - `nvidia-smi` on `$PATH` (optional, for NVIDIA GPU readings)
 - hwmon read access — see [Permissions](#permissions)
 
 ## Install
 
-### Prebuilt binary (recommended)
+### Binary install (no Go required)
 
 ```sh
-VERSION=vX.Y.Z
-curl -LO "https://github.com/moeilijk/lhm-companion/releases/download/${VERSION}/lhm-companion_${VERSION}_linux_amd64.tar.gz"
-curl -LO "https://github.com/moeilijk/lhm-companion/releases/download/${VERSION}/lhm-companion_${VERSION}_linux_amd64.tar.gz.sha256"
-sha256sum -c "lhm-companion_${VERSION}_linux_amd64.tar.gz.sha256"
-tar -xzf "lhm-companion_${VERSION}_linux_amd64.tar.gz"
-cd "lhm-companion_${VERSION}_linux_amd64"
-sudo install -Dm755 lhm-companion /usr/local/bin/lhm-companion
-sudo install -Dm644 lhm-companion.service /etc/systemd/system/lhm-companion.service
-sudo systemctl daemon-reload
+curl -fsSL https://github.com/moeilijk/lhm-companion/releases/latest/download/install.sh | sudo sh
 sudo systemctl enable --now lhm-companion
 ```
 
-Replace `vX.Y.Z` with a tag from [Releases](https://github.com/moeilijk/lhm-companion/releases). The target machine only needs the binary package, not a Go toolchain.
+To pin a specific version, use:
 
-### From source
+```sh
+curl -fsSL https://github.com/moeilijk/lhm-companion/releases/download/v0.1.0/install.sh | sudo env VERSION=v0.1.0 sh
+```
+
+### Source install (Go required)
 
 ```sh
 git clone https://github.com/moeilijk/lhm-companion
