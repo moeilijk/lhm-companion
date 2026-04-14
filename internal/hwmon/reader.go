@@ -126,7 +126,7 @@ func readDevice(dir, hwmonName string, skip map[string]bool) *server.Node {
 
 func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, groups map[string][]server.Node) {
 	files, _ := filepath.Glob(filepath.Join(dir, prefix+"*_input"))
-	sort.Strings(files)
+	sortFilesNumeric(files, prefix, "_input")
 
 	for _, f := range files {
 		idx := extractIndex(filepath.Base(f), prefix, "_input")
@@ -180,7 +180,7 @@ func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, g
 
 func addFreqReadings(dir, hwmonName string, groups map[string][]server.Node) {
 	files, _ := filepath.Glob(filepath.Join(dir, "freq*_input"))
-	sort.Strings(files)
+	sortFilesNumeric(files, "freq", "_input")
 
 	for _, f := range files {
 		idx := extractIndex(filepath.Base(f), "freq", "_input")
@@ -214,6 +214,24 @@ func addFreqReadings(dir, hwmonName string, groups map[string][]server.Node) {
 			ImageURL: "images/transparent.png",
 		})
 	}
+}
+
+// sortFilesNumeric sorts file paths by the integer embedded between prefix and
+// suffix in the base name (e.g. "temp10_input" → 10), avoiding the
+// lexicographic mis-ordering of sort.Strings ("10" < "2").
+func sortFilesNumeric(files []string, prefix, suffix string) {
+	sort.Slice(files, func(i, j int) bool {
+		ni := indexFromBase(filepath.Base(files[i]), prefix, suffix)
+		nj := indexFromBase(filepath.Base(files[j]), prefix, suffix)
+		return ni < nj
+	})
+}
+
+func indexFromBase(base, prefix, suffix string) int {
+	s := strings.TrimPrefix(base, prefix)
+	s = strings.TrimSuffix(s, suffix)
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 func formatVal(v float64, unit string) string {

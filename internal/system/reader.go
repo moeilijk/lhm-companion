@@ -426,7 +426,9 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 
 func readCPUClockNodes() []server.Node {
 	files, _ := filepath.Glob(cpuFreqGlob)
-	sort.Strings(files)
+	sort.Slice(files, func(i, j int) bool {
+		return cpuIndex(filepath.Dir(filepath.Dir(files[i]))) < cpuIndex(filepath.Dir(filepath.Dir(files[j])))
+	})
 
 	nodes := make([]server.Node, 0, len(files))
 	for idx, file := range files {
