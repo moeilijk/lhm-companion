@@ -90,4 +90,4 @@ AMD GPU readings come through hwmon via the `amdgpu` driver automatically.
 
 ## License
 
-MIT
+GPL-3.0-only

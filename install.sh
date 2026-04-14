@@ -7,6 +7,7 @@ BINARY="${BINARY:-lhm-companion}"
 VERSION="${VERSION:-latest}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 UNIT_DIR="${UNIT_DIR:-/etc/systemd/system}"
+STATE_DIR="${STATE_DIR:-/var/lib/lhm-companion}"
 SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 BASE_URL="${BASE_URL:-}"
 
@@ -38,6 +39,8 @@ fi
 need_cmd tar
 need_cmd sha256sum
 need_cmd install
+need_cmd mkdir
+need_cmd sed
 need_cmd "$SYSTEMCTL"
 
 os="$(uname -s)"
@@ -85,8 +88,28 @@ download "$checksum" "$base_url/$asset_base.sha256"
 (cd "$tmpdir" && sha256sum -c "$(basename "$checksum")")
 tar -C "$tmpdir" --no-same-owner --strip-components=1 -xzf "$archive"
 
+unit_tmp="${tmpdir}/${BINARY}.installed.service"
+sed "s|^ExecStart=.*$|ExecStart=${BIN_DIR}/${BINARY}|" "$tmpdir/$BINARY.service" > "$unit_tmp"
+
 install -Dm755 "$tmpdir/$BINARY" "$BIN_DIR/$BINARY"
-install -Dm644 "$tmpdir/$BINARY.service" "$UNIT_DIR/$BINARY.service"
+install -Dm644 "$unit_tmp" "$UNIT_DIR/$BINARY.service"
+mkdir -p "$STATE_DIR"
+set -- $(sha256sum "$tmpdir/$BINARY")
+binary_sha="$1"
+set -- $(sha256sum "$unit_tmp")
+unit_sha="$1"
+cat > "$STATE_DIR/install.env" <<EOF
+REPO='${REPO}'
+VERSION='${VERSION}'
+BINARY='${BINARY}'
+SERVICE_NAME='${BINARY}.service'
+BINARY_PATH='${BIN_DIR}/${BINARY}'
+UNIT_PATH='${UNIT_DIR}/${BINARY}.service'
+STATE_DIR='${STATE_DIR}'
+UNIT_EXECSTART='${BIN_DIR}/${BINARY}'
+BINARY_SHA256='${binary_sha}'
+UNIT_SHA256='${unit_sha}'
+EOF
 "$SYSTEMCTL" daemon-reload
 "$SYSTEMCTL" enable "$BINARY.service"
 if "$SYSTEMCTL" is-active --quiet "$BINARY.service"; then
@@ -99,4 +122,5 @@ fi
 
 echo "Installed $BINARY to $BIN_DIR/$BINARY"
 echo "Installed systemd unit to $UNIT_DIR/$BINARY.service"
+echo "Wrote install metadata to $STATE_DIR/install.env"
 echo "Enabled $BINARY.service"

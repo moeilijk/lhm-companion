@@ -10,15 +10,16 @@ import (
 	"github.com/moeilijk/lhm-companion/internal/hwmon"
 	"github.com/moeilijk/lhm-companion/internal/nvidia"
 	"github.com/moeilijk/lhm-companion/internal/server"
+	"github.com/moeilijk/lhm-companion/internal/system"
 )
 
 var version = "dev"
 
 func main() {
 	var (
-		port      = flag.Int("port", envInt("LHM_PORT", 8085), "port to listen on")
-		withNv    = flag.Bool("nvidia", nvidia.Available(), "include nvidia-smi GPU readings")
-		showVer   = flag.Bool("version", false, "print version and exit")
+		port    = flag.Int("port", envInt("LHM_PORT", 8085), "port to listen on")
+		withNv  = flag.Bool("nvidia", nvidia.Available(), "include nvidia-smi GPU readings")
+		showVer = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
 
@@ -33,7 +34,8 @@ func main() {
 	}
 
 	provide := func() server.Node {
-		children := hwmon.ReadAll()
+		children := system.ReadAll()
+		children = append(children, hwmon.ReadAll()...)
 		if *withNv {
 			children = append(children, nvidia.ReadAll()...)
 		}
