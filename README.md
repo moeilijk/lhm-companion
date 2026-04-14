@@ -17,20 +17,30 @@ The Stream Deck plugin's `lhm-bridge.exe` reads `http://host:port/data.json`. lh
 
 ## Install
 
+### Prebuilt binary (recommended)
+
+```sh
+VERSION=vX.Y.Z
+curl -LO "https://github.com/moeilijk/lhm-companion/releases/download/${VERSION}/lhm-companion_${VERSION}_linux_amd64.tar.gz"
+curl -LO "https://github.com/moeilijk/lhm-companion/releases/download/${VERSION}/lhm-companion_${VERSION}_linux_amd64.tar.gz.sha256"
+sha256sum -c "lhm-companion_${VERSION}_linux_amd64.tar.gz.sha256"
+tar -xzf "lhm-companion_${VERSION}_linux_amd64.tar.gz"
+cd "lhm-companion_${VERSION}_linux_amd64"
+sudo install -Dm755 lhm-companion /usr/local/bin/lhm-companion
+sudo install -Dm644 lhm-companion.service /etc/systemd/system/lhm-companion.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now lhm-companion
+```
+
+Replace `vX.Y.Z` with a tag from [Releases](https://github.com/moeilijk/lhm-companion/releases). The target machine only needs the binary package, not a Go toolchain.
+
 ### From source
 
 ```sh
 git clone https://github.com/moeilijk/lhm-companion
 cd lhm-companion
 make build
-sudo make install        # copies binary + systemd unit
-sudo systemctl enable --now lhm-companion
-```
-
-### Manual
-
-```sh
-go install github.com/moeilijk/lhm-companion/cmd/lhm-companion@latest
+sudo make install
 ```
 
 ## Usage
