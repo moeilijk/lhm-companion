@@ -142,8 +142,10 @@ func TestBuildCPULoadNodesUseLHMThreadLabels(t *testing.T) {
 
 	want := []string{
 		"CPU Total",
+		"CPU Core #1",
 		"CPU Core #1 Thread #1",
 		"CPU Core #1 Thread #2",
+		"CPU Core #2",
 		"CPU Core #2 Thread #1",
 		"CPU Core #2 Thread #2",
 	}

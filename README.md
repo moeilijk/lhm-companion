@@ -75,7 +75,7 @@ Read on every poll from `/proc` and `/sys`; no drivers or extra permissions requ
 
 | Source | Sensor type | Sensors |
 |--------|-------------|---------|
-| `/proc/stat` | Load | CPU Total, plus `CPU Core #…` or `CPU Core #… Thread #…` depending on SMT topology |
+| `/proc/stat` | Load | CPU Total, per-core %, and on SMT systems also `CPU Core #… Thread #…` |
 | `/sys/…/cpufreq/scaling_cur_freq` | Clock | CPU Core #1…N, deduplicated to physical cores via sysfs topology (requires `cpufreq` driver; not available in WSL) |
 | `/proc/meminfo` | Load / Data | RAM load %, Used / Available / Total RAM, Used / Total Swap |
 | `/sys/class/net/*/statistics` | Throughput / Data / Load | Rx/Tx rate, cumulative bytes, link utilisation % (load only when link speed is known); loopback (`lo`) excluded |

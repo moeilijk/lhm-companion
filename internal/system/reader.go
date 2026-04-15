@@ -382,62 +382,81 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 	cpuPrev = current
 	cpuPrevMu.Unlock()
 	topology := readCPUTopology()
+	coreCurrent := aggregateCoreTimes(current, topology)
+	corePrev := aggregateCoreTimes(prev, topology)
 
 	keys := make([]string, 0, len(current))
 	for key := range current {
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		if keys[i] == "cpu" {
-			return true
-		}
-		if keys[j] == "cpu" {
-			return false
-		}
-		return cpuIndex(keys[i]) < cpuIndex(keys[j])
+		return compareCPUKeys(keys[i], keys[j], topology)
 	})
 
-	nodes := make([]server.Node, 0, len(keys))
+	nodes := make([]server.Node, 0, len(keys)*2)
+	seenCores := map[int]bool{}
 	for _, key := range keys {
-		cur := current[key]
-		usage := 0.0
-		if old, ok := prev[key]; ok && cur.total > old.total {
-			deltaTotal := cur.total - old.total
-			deltaIdle := cur.idle - old.idle
-			usage = percent(float64(deltaTotal-deltaIdle), float64(deltaTotal))
+		if key == "cpu" {
+			nodes = append(nodes, loadNodeFromTimes("CPU Total", "/cpu/load/total", current[key], prev[key]))
+			continue
 		}
 
-		label := "CPU Total"
-		sensorID := "/cpu/load/total"
-		if key != "cpu" {
-			label, sensorID = cpuLoadMetadata(cpuIndex(key), topology)
+		cpu := cpuIndex(key)
+		if topo, ok := topology[cpu]; ok && topo.threadCount > 1 && !seenCores[topo.coreOrdinal] {
+			seenCores[topo.coreOrdinal] = true
+			nodes = append(nodes, loadNodeFromTimes(
+				"CPU Core #"+strconv.Itoa(topo.coreOrdinal),
+				fmt.Sprintf("/cpu/load/core-%d", topo.coreOrdinal),
+				coreCurrent[topo.coreOrdinal],
+				corePrev[topo.coreOrdinal],
+			))
 		}
-		min, max := trackValue(sensorID, usage)
-		valStr := formatValue(usage, "%")
-		minStr := formatValue(min, "%")
-		maxStr := formatValue(max, "%")
-		nodes = append(nodes, server.Node{
-			Text:     label,
-			Value:    valStr,
-			Min:      minStr,
-			Max:      maxStr,
-			SensorId: sensorID,
-			Type:     "Load",
-			RawValue: valStr,
-			RawMin:   minStr,
-			RawMax:   maxStr,
-			ImageURL: "images/transparent.png",
-		})
+
+		label, sensorID := cpuLoadMetadata(cpu, topology)
+		nodes = append(nodes, loadNodeFromTimes(label, sensorID, current[key], prev[key]))
 	}
 	return nodes
 }
 
+func loadNodeFromTimes(label, sensorID string, cur, old cpuTimes) server.Node {
+	usage := cpuUsage(cur, old)
+	min, max := trackValue(sensorID, usage)
+	valStr := formatValue(usage, "%")
+	minStr := formatValue(min, "%")
+	maxStr := formatValue(max, "%")
+	return server.Node{
+		Text:     label,
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
+		SensorId: sensorID,
+		Type:     "Load",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
+	}
+}
+
+func cpuUsage(cur, old cpuTimes) float64 {
+	if old.total == 0 || cur.total <= old.total {
+		return 0
+	}
+	deltaTotal := cur.total - old.total
+	deltaIdle := cur.idle - old.idle
+	return percent(float64(deltaTotal-deltaIdle), float64(deltaTotal))
+}
+
 func readCPUClockNodes() []server.Node {
 	files, _ := filepath.Glob(cpuFreqGlob)
-	sort.Slice(files, func(i, j int) bool {
-		return cpuIndex(filepath.Dir(filepath.Dir(files[i]))) < cpuIndex(filepath.Dir(filepath.Dir(files[j])))
-	})
 	topology := readCPUTopology()
+	sort.Slice(files, func(i, j int) bool {
+		return compareCPUIndices(
+			cpuIndex(filepath.Dir(filepath.Dir(files[i]))),
+			cpuIndex(filepath.Dir(filepath.Dir(files[j]))),
+			topology,
+		)
+	})
 	seenCores := map[int]bool{}
 
 	nodes := make([]server.Node, 0, len(files))
@@ -492,6 +511,29 @@ func cpuLoadMetadata(cpu int, topology map[int]cpuTopology) (string, string) {
 	return "CPU Core #" + strconv.Itoa(cpu+1), fmt.Sprintf("/cpu/load/core-%d", cpu+1)
 }
 
+func aggregateCoreTimes(samples map[string]cpuTimes, topology map[int]cpuTopology) map[int]cpuTimes {
+	if len(topology) == 0 {
+		return nil
+	}
+
+	out := map[int]cpuTimes{}
+	for key, sample := range samples {
+		if key == "cpu" {
+			continue
+		}
+		cpu := cpuIndex(key)
+		topo, ok := topology[cpu]
+		if !ok {
+			continue
+		}
+		agg := out[topo.coreOrdinal]
+		agg.total += sample.total
+		agg.idle += sample.idle
+		out[topo.coreOrdinal] = agg
+	}
+	return out
+}
+
 func readCPUTopology() map[int]cpuTopology {
 	dirs, _ := filepath.Glob(filepath.Join(cpuSysBase, "cpu[0-9]*"))
 	if len(dirs) == 0 {
@@ -543,6 +585,30 @@ func readCPUTopology() map[int]cpuTopology {
 		i = j
 	}
 	return out
+}
+
+func compareCPUKeys(left, right string, topology map[int]cpuTopology) bool {
+	if left == "cpu" {
+		return true
+	}
+	if right == "cpu" {
+		return false
+	}
+	return compareCPUIndices(cpuIndex(left), cpuIndex(right), topology)
+}
+
+func compareCPUIndices(left, right int, topology map[int]cpuTopology) bool {
+	leftTopo, leftOK := topology[left]
+	rightTopo, rightOK := topology[right]
+	if leftOK && rightOK {
+		if leftTopo.coreOrdinal != rightTopo.coreOrdinal {
+			return leftTopo.coreOrdinal < rightTopo.coreOrdinal
+		}
+		if leftTopo.threadOrdinal != rightTopo.threadOrdinal {
+			return leftTopo.threadOrdinal < rightTopo.threadOrdinal
+		}
+	}
+	return left < right
 }
 
 func readTopologyInt(path string, fallback int) int {
