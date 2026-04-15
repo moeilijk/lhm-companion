@@ -19,7 +19,7 @@ SOURCES   := $(shell find cmd internal -type f -name '*.go' 2>/dev/null)
 
 build:
 	@command -v $(GO) >/dev/null 2>&1 || { \
-		echo "Error: Go 1.22+ is required and '$(GO)' was not found on PATH."; \
+		echo "Error: Go 1.26+ is required and '$(GO)' was not found on PATH."; \
 		echo "Use 'make build && sudo make install' for a source build."; \
 		exit 127; \
 	}
@@ -28,7 +28,7 @@ build:
 
 $(TARGET): $(SOURCES) go.mod $(wildcard go.sum) Makefile
 	@command -v $(GO) >/dev/null 2>&1 || { \
-		echo "Error: Go 1.22+ is required and '$(GO)' was not found on PATH."; \
+		echo "Error: Go 1.26+ is required and '$(GO)' was not found on PATH."; \
 		echo "Use 'make build && sudo make install' for a source build."; \
 		exit 127; \
 	}
@@ -37,7 +37,7 @@ $(TARGET): $(SOURCES) go.mod $(wildcard go.sum) Makefile
 
 check-go:
 	@command -v $(GO) >/dev/null 2>&1 || { \
-		echo "Error: Go 1.22+ is required and '$(GO)' was not found on PATH."; \
+		echo "Error: Go 1.26+ is required and '$(GO)' was not found on PATH."; \
 		exit 127; \
 	}
 

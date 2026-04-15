@@ -11,7 +11,7 @@ The Stream Deck plugin can poll a remote `http://host:port/data.json` endpoint. 
 ## Requirements
 
 - Linux (any modern distro — kernel ≥ 4.x)
-- Go 1.22+ (source builds only)
+- Go 1.26+ (source builds only)
 - `nvidia-smi` on `$PATH` (optional — for NVIDIA GPU readings)
 - Read access to `/sys/class/hwmon` (optional — for hardware sensor readings; world-readable on most distros)
 
