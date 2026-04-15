@@ -113,17 +113,17 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	}
 
 	leaves := leafNodesByID(nodes)
-	if got := leaves["/network/eth0/throughput/0"].Value; got != "8,0 MB/s" {
-		t.Fatalf("network rx throughput = %q, want %q", got, "8,0 MB/s")
+	if got := leaves["/network/eth0/throughput/0"].Value; got != "8388608,0 B/s" {
+		t.Fatalf("network rx throughput = %q, want %q", got, "8388608,0 B/s")
 	}
-	if got := leaves["/network/eth0/throughput/1"].Value; got != "16,0 MB/s" {
-		t.Fatalf("network tx throughput = %q, want %q", got, "16,0 MB/s")
+	if got := leaves["/network/eth0/throughput/1"].Value; got != "16777216,0 B/s" {
+		t.Fatalf("network tx throughput = %q, want %q", got, "16777216,0 B/s")
 	}
-	if got := leaves["/network/eth0/data/0"].Value; got != "1,0 GB" {
-		t.Fatalf("network rx total = %q, want %q", got, "1,0 GB")
+	if got := leaves["/network/eth0/data/0"].Value; got != "1090519040,0 B" {
+		t.Fatalf("network rx total = %q, want %q", got, "1090519040,0 B")
 	}
-	if got := leaves["/network/eth0/data/1"].Value; got != "2,0 GB" {
-		t.Fatalf("network tx total = %q, want %q", got, "2,0 GB")
+	if got := leaves["/network/eth0/data/1"].Value; got != "2181038080,0 B" {
+		t.Fatalf("network tx total = %q, want %q", got, "2181038080,0 B")
 	}
 }
 

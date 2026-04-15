@@ -751,9 +751,9 @@ func throughputNode(id, label string, value float64, sensorID string) server.Nod
 
 func networkThroughputNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
-	valStr := formatBytesFixed(value, "MB/s")
-	minStr := formatBytesFixed(min, "MB/s")
-	maxStr := formatBytesFixed(max, "MB/s")
+	valStr := formatValue(value, "B/s")
+	minStr := formatValue(min, "B/s")
+	maxStr := formatValue(max, "B/s")
 	return server.Node{
 		Text:     label,
 		Value:    valStr,
@@ -789,9 +789,9 @@ func dataNode(id, label string, value float64, sensorID string) server.Node {
 
 func networkDataNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
-	valStr := formatBytesFixed(value, "GB")
-	minStr := formatBytesFixed(min, "GB")
-	maxStr := formatBytesFixed(max, "GB")
+	valStr := formatValue(value, "B")
+	minStr := formatValue(min, "B")
+	maxStr := formatValue(max, "B")
 	return server.Node{
 		Text:     label,
 		Value:    valStr,
@@ -843,20 +843,6 @@ func formatBytes(v float64, perSecond bool) string {
 	unit := units[idx]
 	if perSecond {
 		unit += "/s"
-	}
-	return formatValue(v, unit)
-}
-
-func formatBytesFixed(v float64, unit string) string {
-	switch unit {
-	case "KB":
-		v /= 1024
-	case "MB", "MB/s":
-		v /= 1024 * 1024
-	case "GB":
-		v /= 1024 * 1024 * 1024
-	case "TB":
-		v /= 1024 * 1024 * 1024 * 1024
 	}
 	return formatValue(v, unit)
 }
