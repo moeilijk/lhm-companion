@@ -220,14 +220,14 @@ func readNetwork() *server.Node {
 		var children []server.Node
 
 		throughputNodes := []server.Node{
-			throughputNode("/network/"+name+"/throughput/rx", "Receive", rxRate, "/network/"+name+"/throughput/0"),
-			throughputNode("/network/"+name+"/throughput/tx", "Transmit", txRate, "/network/"+name+"/throughput/1"),
+			networkThroughputNode("/network/"+name+"/throughput/rx", "Receive", rxRate, "/network/"+name+"/throughput/0"),
+			networkThroughputNode("/network/"+name+"/throughput/tx", "Transmit", txRate, "/network/"+name+"/throughput/1"),
 		}
 		children = append(children, server.Node{Text: "Throughput", ImageURL: "images_icon/throughput.png", Children: throughputNodes})
 
 		dataNodes := []server.Node{
-			dataNode("/network/"+name+"/data/rx", "Received Total", float64(rx), "/network/"+name+"/data/0"),
-			dataNode("/network/"+name+"/data/tx", "Transmitted Total", float64(tx), "/network/"+name+"/data/1"),
+			networkDataNode("/network/"+name+"/data/rx", "Received Total", float64(rx), "/network/"+name+"/data/0"),
+			networkDataNode("/network/"+name+"/data/tx", "Transmitted Total", float64(tx), "/network/"+name+"/data/1"),
 		}
 		children = append(children, server.Node{Text: "Data", ImageURL: "images_icon/power.png", Children: dataNodes})
 
@@ -749,11 +749,49 @@ func throughputNode(id, label string, value float64, sensorID string) server.Nod
 	}
 }
 
+func networkThroughputNode(id, label string, value float64, sensorID string) server.Node {
+	min, max := trackValue(id, value)
+	valStr := formatBytesFixed(value, "MB/s")
+	minStr := formatBytesFixed(min, "MB/s")
+	maxStr := formatBytesFixed(max, "MB/s")
+	return server.Node{
+		Text:     label,
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
+		SensorId: sensorID,
+		Type:     "Throughput",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
+	}
+}
+
 func dataNode(id, label string, value float64, sensorID string) server.Node {
 	min, max := trackValue(id, value)
 	valStr := formatBytes(value, false)
 	minStr := formatBytes(min, false)
 	maxStr := formatBytes(max, false)
+	return server.Node{
+		Text:     label,
+		Value:    valStr,
+		Min:      minStr,
+		Max:      maxStr,
+		SensorId: sensorID,
+		Type:     "Data",
+		RawValue: valStr,
+		RawMin:   minStr,
+		RawMax:   maxStr,
+		ImageURL: "images/transparent.png",
+	}
+}
+
+func networkDataNode(id, label string, value float64, sensorID string) server.Node {
+	min, max := trackValue(id, value)
+	valStr := formatBytesFixed(value, "GB")
+	minStr := formatBytesFixed(min, "GB")
+	maxStr := formatBytesFixed(max, "GB")
 	return server.Node{
 		Text:     label,
 		Value:    valStr,
@@ -805,6 +843,20 @@ func formatBytes(v float64, perSecond bool) string {
 	unit := units[idx]
 	if perSecond {
 		unit += "/s"
+	}
+	return formatValue(v, unit)
+}
+
+func formatBytesFixed(v float64, unit string) string {
+	switch unit {
+	case "KB":
+		v /= 1024
+	case "MB", "MB/s":
+		v /= 1024 * 1024
+	case "GB":
+		v /= 1024 * 1024 * 1024
+	case "TB":
+		v /= 1024 * 1024 * 1024 * 1024
 	}
 	return formatValue(v, unit)
 }

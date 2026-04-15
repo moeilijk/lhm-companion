@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/moeilijk/lhm-companion/internal/server"
 )
 
 func TestReadAllIncludesCPUAndMemory(t *testing.T) {
@@ -68,8 +70,8 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 
 	writeFile(t, filepath.Join(procDir, "stat"), "cpu  10 0 10 80 0 0 0 0 0 0\n")
 	writeFile(t, filepath.Join(procDir, "meminfo"), "MemTotal: 1024 kB\nMemAvailable: 512 kB\n")
-	writeFile(t, filepath.Join(netDir, "statistics/rx_bytes"), "1000\n")
-	writeFile(t, filepath.Join(netDir, "statistics/tx_bytes"), "2000\n")
+	writeFile(t, filepath.Join(netDir, "statistics/rx_bytes"), "1073741824\n")
+	writeFile(t, filepath.Join(netDir, "statistics/tx_bytes"), "2147483648\n")
 	writeFile(t, filepath.Join(netDir, "speed"), "1000\n")
 	writeFile(t, filepath.Join(blockDir, "stat"), "1 0 2 0 3 0 4 0 0 5 0\n")
 	writeFile(t, filepath.Join(blockDir, "queue/logical_block_size"), "512\n")
@@ -84,8 +86,8 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	now = func() time.Time { return time.Unix(10, 0) }
 	_ = ReadAll()
 
-	writeFile(t, filepath.Join(netDir, "statistics/rx_bytes"), "3000\n")
-	writeFile(t, filepath.Join(netDir, "statistics/tx_bytes"), "5000\n")
+	writeFile(t, filepath.Join(netDir, "statistics/rx_bytes"), "1090519040\n")
+	writeFile(t, filepath.Join(netDir, "statistics/tx_bytes"), "2181038080\n")
 	writeFile(t, filepath.Join(blockDir, "stat"), "1 0 6 0 3 0 10 0 0 15 0\n")
 	now = func() time.Time { return time.Unix(12, 0) }
 
@@ -108,6 +110,20 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	}
 	if !storageFound {
 		t.Fatal("Storage node missing")
+	}
+
+	leaves := leafNodesByID(nodes)
+	if got := leaves["/network/eth0/throughput/0"].Value; got != "8,0 MB/s" {
+		t.Fatalf("network rx throughput = %q, want %q", got, "8,0 MB/s")
+	}
+	if got := leaves["/network/eth0/throughput/1"].Value; got != "16,0 MB/s" {
+		t.Fatalf("network tx throughput = %q, want %q", got, "16,0 MB/s")
+	}
+	if got := leaves["/network/eth0/data/0"].Value; got != "1,0 GB" {
+		t.Fatalf("network rx total = %q, want %q", got, "1,0 GB")
+	}
+	if got := leaves["/network/eth0/data/1"].Value; got != "2,0 GB" {
+		t.Fatalf("network tx total = %q, want %q", got, "2,0 GB")
 	}
 }
 
@@ -229,4 +245,21 @@ func mustMkdirAll(t *testing.T, path string) {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", path, err)
 	}
+}
+
+func leafNodesByID(nodes []server.Node) map[string]server.Node {
+	leaves := map[string]server.Node{}
+	var walk func(server.Node)
+	walk = func(n server.Node) {
+		if n.SensorId != "" {
+			leaves[n.SensorId] = n
+		}
+		for _, child := range n.Children {
+			walk(child)
+		}
+	}
+	for _, node := range nodes {
+		walk(node)
+	}
+	return leaves
 }
