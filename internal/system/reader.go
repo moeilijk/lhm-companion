@@ -140,17 +140,10 @@ func readMemory() *server.Node {
 	used := total - minUint64(total, available)
 
 	loadPct := percent(float64(used), float64(total))
-	loadMin, loadMax := trackValue("/memory/load/0", loadPct)
 
 	loadNodes := []server.Node{
 		loadNode("/memory/load/0", "Memory", loadPct, "/memory/load/0"),
 	}
-	// Override SensorId since loadNode generates it internally
-	loadNodes[0].SensorId = "/memory/load/0"
-	loadNodes[0].Min = formatValue(loadMin, "%")
-	loadNodes[0].Max = formatValue(loadMax, "%")
-	loadNodes[0].RawMin = loadNodes[0].Min
-	loadNodes[0].RawMax = loadNodes[0].Max
 
 	dataNodes := []server.Node{
 		dataNode("/memory/data/0", "Used Memory", float64(used), "/memory/data/0"),

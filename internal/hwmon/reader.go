@@ -11,14 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/moeilijk/lhm-companion/internal/server"
 )
 
 var sysfsBase = "/sys/class/hwmon"
 
-// Snapshot holds min/max tracking per reading across the process lifetime.
 type tracker struct {
 	min float64
 	max float64
@@ -506,9 +504,4 @@ func Hostname() string {
 		return "Linux"
 	}
 	return h
-}
-
-// PollTime returns a nanosecond timestamp usable as the LHM poll time.
-func PollTime() uint64 {
-	return uint64(time.Now().UnixNano())
 }
