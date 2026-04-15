@@ -825,6 +825,9 @@ func trackValue(id string, value float64) (float64, float64) {
 }
 
 func formatValue(v float64, unit string) string {
+	if unit == "B" || unit == "B/s" {
+		return strconv.FormatFloat(math.Round(v), 'f', 0, 64) + " " + unit
+	}
 	s := strconv.FormatFloat(v, 'f', 1, 64)
 	s = strings.ReplaceAll(s, ".", ",")
 	if unit == "" {
