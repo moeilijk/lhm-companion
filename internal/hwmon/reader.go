@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"github.com/moeilijk/lhm-companion/internal/server"
 )
 
-const sysfsBase = "/sys/class/hwmon"
+var sysfsBase = "/sys/class/hwmon"
 
 // Snapshot holds min/max tracking per reading across the process lifetime.
 type tracker struct {
@@ -26,6 +27,11 @@ type tracker struct {
 var (
 	trackMu  sync.Mutex
 	tracking = map[string]*tracker{}
+)
+
+var (
+	pciAddressRE    = regexp.MustCompile(`^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$`)
+	nvmeNamespaceRE = regexp.MustCompile(`^nvme[0-9]+n[0-9]+(?:p[0-9]+)?$`)
 )
 
 func track(id string, val float64) (min, max float64) {
@@ -92,13 +98,14 @@ func readDevice(dir, hwmonName string, skip map[string]bool) *server.Node {
 	}
 
 	groups := map[string][]server.Node{}
+	baseID := deviceBaseID(dir, hwmonName, name)
 
-	addReadings(dir, hwmonName, "temp", "Temperature", "°C", 1e-3, groups)
-	addReadings(dir, hwmonName, "fan", "Fan", "RPM", 1, groups)
-	addReadings(dir, hwmonName, "in", "Voltage", "V", 1e-3, groups)
-	addReadings(dir, hwmonName, "power", "Power", "W", 1e-6, groups)
-	addReadings(dir, hwmonName, "curr", "Current", "A", 1e-3, groups)
-	addFreqReadings(dir, hwmonName, groups)
+	addReadings(dir, baseID, "temp", "Temperature", "°C", 1e-3, groups)
+	addReadings(dir, baseID, "fan", "Fan", "RPM", 1, groups)
+	addReadings(dir, baseID, "in", "Voltage", "V", 1e-3, groups)
+	addReadings(dir, baseID, "power", "Power", "W", 1e-6, groups)
+	addReadings(dir, baseID, "curr", "Current", "A", 1e-3, groups)
+	addFreqReadings(dir, baseID, groups)
 
 	if len(groups) == 0 {
 		return nil
@@ -124,7 +131,7 @@ func readDevice(dir, hwmonName string, skip map[string]bool) *server.Node {
 	}
 }
 
-func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, groups map[string][]server.Node) {
+func addReadings(dir, baseID, prefix, typeName, unit string, scale float64, groups map[string][]server.Node) {
 	files, _ := filepath.Glob(filepath.Join(dir, prefix+"*_input"))
 	sortFilesNumeric(files, prefix, "_input")
 
@@ -147,7 +154,7 @@ func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, g
 			maxRaw = readFileInt(filepath.Join(dir, prefix+idx+"_crit"))
 		}
 
-		sensorId := fmt.Sprintf("/%s/%s/%s", hwmonName, strings.ToLower(typeName), idx)
+		sensorId := fmt.Sprintf("%s/%s/%s", baseID, strings.ToLower(typeName), idx)
 		tMin, tMax := track(sensorId, val)
 
 		var minStr, maxStr string
@@ -178,7 +185,7 @@ func addReadings(dir, hwmonName, prefix, typeName, unit string, scale float64, g
 	}
 }
 
-func addFreqReadings(dir, hwmonName string, groups map[string][]server.Node) {
+func addFreqReadings(dir, baseID string, groups map[string][]server.Node) {
 	files, _ := filepath.Glob(filepath.Join(dir, "freq*_input"))
 	sortFilesNumeric(files, "freq", "_input")
 
@@ -195,7 +202,7 @@ func addFreqReadings(dir, hwmonName string, groups map[string][]server.Node) {
 			label = "Clock " + idx
 		}
 
-		sensorId := fmt.Sprintf("/%s/clock/%s", hwmonName, idx)
+		sensorId := fmt.Sprintf("%s/clock/%s", baseID, idx)
 		tMin, tMax := track(sensorId, val)
 
 		valStr := formatVal(val, "MHz")
@@ -248,6 +255,209 @@ func extractIndex(filename, prefix, suffix string) string {
 	s := strings.TrimPrefix(filename, prefix)
 	s = strings.TrimSuffix(s, suffix)
 	return s
+}
+
+func deviceBaseID(dir, hwmonName, name string) string {
+	canonical := canonicalDevicePath(dir)
+	deviceName := sanitizeIDPart(name)
+	if deviceName == "" {
+		deviceName = sanitizeIDPart(hwmonName)
+	}
+
+	switch {
+	case isCPUDevice(name, canonical):
+		return "/cpu"
+	case isGPUDevice(name, canonical):
+		token := firstPathSegment(canonical, isPCIAddress)
+		if token == "" {
+			token = firstNonEmpty(deviceName, hwmonName)
+		}
+		return "/gpu-amd/" + sanitizeIDPart(token)
+	case isStorageDevice(name, canonical):
+		token := storageToken(canonical)
+		if token == "" {
+			token = firstNonEmpty(deviceName, hwmonName)
+		}
+		return "/storage/" + sanitizeIDPart(token)
+	case isNetworkDevice(canonical):
+		token := segmentAfter(canonical, "net")
+		if token == "" {
+			token = firstNonEmpty(deviceName, hwmonName)
+		}
+		return "/network/" + sanitizeIDPart(token)
+	case isLPCDevice(name, canonical):
+		token := platformToken(canonical)
+		if token == "" {
+			token = firstNonEmpty(deviceName, hwmonName)
+		}
+		return "/lpc/" + sanitizeIDPart(token)
+	case isThermalDevice(name, canonical):
+		token := firstNonEmpty(thermalToken(canonical), deviceName, hwmonName)
+		return "/thermal/" + sanitizeIDPart(token)
+	default:
+		token := firstNonEmpty(deviceToken(canonical), deviceName, hwmonName)
+		return "/" + sanitizeIDPart(token)
+	}
+}
+
+func canonicalDevicePath(dir string) string {
+	for _, candidate := range []string{filepath.Join(dir, "device"), dir} {
+		if resolved, err := filepath.EvalSymlinks(candidate); err == nil {
+			return filepath.Clean(resolved)
+		}
+	}
+	return filepath.Clean(dir)
+}
+
+func isCPUDevice(name, canonical string) bool {
+	switch name {
+	case "coretemp", "k10temp", "zenpower", "cpu_thermal", "fam15h_power":
+		return true
+	}
+	return strings.Contains(canonical, "/cpu") || strings.Contains(canonical, "coretemp.") || strings.Contains(canonical, "k10temp.")
+}
+
+func isGPUDevice(name, canonical string) bool {
+	return name == "amdgpu" || strings.Contains(canonical, "/drm/") || strings.Contains(canonical, "/gpu")
+}
+
+func isStorageDevice(name, canonical string) bool {
+	return name == "nvme" || name == "drivetemp" || strings.Contains(canonical, "/block/") || strings.Contains(canonical, "/nvme/")
+}
+
+func isNetworkDevice(canonical string) bool {
+	return strings.Contains(canonical, "/net/")
+}
+
+func isLPCDevice(name, canonical string) bool {
+	lower := strings.ToLower(name)
+	return strings.Contains(canonical, "/platform/") ||
+		strings.Contains(canonical, "/isa") ||
+		strings.HasPrefix(lower, "nct") ||
+		strings.HasPrefix(lower, "it8") ||
+		strings.HasPrefix(lower, "w836") ||
+		strings.HasPrefix(lower, "f718")
+}
+
+func isThermalDevice(name, canonical string) bool {
+	lower := strings.ToLower(name)
+	return lower == "acpitz" || strings.Contains(canonical, "thermal")
+}
+
+func storageToken(canonical string) string {
+	segs := pathSegments(canonical)
+	for _, seg := range segs {
+		if nvmeNamespaceRE.MatchString(seg) {
+			return seg
+		}
+	}
+	for _, seg := range segs {
+		switch {
+		case strings.HasPrefix(seg, "nvme") && len(seg) > len("nvme"):
+			// Fall back to the controller name if the namespace path is unavailable.
+			return seg
+		case strings.HasPrefix(seg, "sd"),
+			strings.HasPrefix(seg, "vd"),
+			strings.HasPrefix(seg, "xvd"),
+			strings.HasPrefix(seg, "hd"),
+			strings.HasPrefix(seg, "md"):
+			return seg
+		}
+	}
+	return segmentAfter(canonical, "block")
+}
+
+func platformToken(canonical string) string {
+	return segmentAfter(canonical, "platform")
+}
+
+func thermalToken(canonical string) string {
+	for _, seg := range pathSegments(canonical) {
+		if strings.Contains(strings.ToLower(seg), "thermal") || strings.Contains(strings.ToLower(seg), "tz") {
+			return seg
+		}
+	}
+	return ""
+}
+
+func deviceToken(canonical string) string {
+	segs := pathSegments(canonical)
+	if len(segs) == 0 {
+		return ""
+	}
+	return segs[len(segs)-1]
+}
+
+func segmentAfter(path, marker string) string {
+	segs := pathSegments(path)
+	for i := 0; i < len(segs)-1; i++ {
+		if segs[i] == marker {
+			return segs[i+1]
+		}
+	}
+	return ""
+}
+
+func firstPathSegment(path string, match func(string) bool) string {
+	for _, seg := range pathSegments(path) {
+		if match(seg) {
+			return seg
+		}
+	}
+	return ""
+}
+
+func pathSegments(path string) []string {
+	clean := filepath.Clean(path)
+	parts := strings.Split(clean, string(filepath.Separator))
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" && part != "." && part != "/" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func isPCIAddress(seg string) bool {
+	return pciAddressRE.MatchString(seg)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return "device"
+}
+
+func sanitizeIDPart(s string) string {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		case r == ':':
+			b.WriteRune('_')
+		default:
+			b.WriteRune('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	out = strings.ReplaceAll(out, "--", "-")
+	if out == "" {
+		return "device"
+	}
+	return out
 }
 
 func readFile(path string) string {

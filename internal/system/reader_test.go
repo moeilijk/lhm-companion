@@ -3,6 +3,7 @@ package system
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,68 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	}
 	if !storageFound {
 		t.Fatal("Storage node missing")
+	}
+}
+
+func TestBuildCPULoadNodesUseTypePrefixedNaturalLabels(t *testing.T) {
+	resetState()
+
+	current := map[string]cpuTimes{
+		"cpu":   {total: 100, idle: 50},
+		"cpu0":  {total: 100, idle: 50},
+		"cpu1":  {total: 100, idle: 50},
+		"cpu2":  {total: 100, idle: 50},
+		"cpu10": {total: 100, idle: 50},
+		"cpu11": {total: 100, idle: 50},
+	}
+
+	nodes := buildCPULoadNodes(current)
+	got := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		got = append(got, node.Text)
+	}
+
+	want := []string{
+		"Load (Total)",
+		"Load Core #00",
+		"Load Core #01",
+		"Load Core #02",
+		"Load Core #10",
+		"Load Core #11",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("labels = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadCPUClockNodesUseTypePrefixedNaturalLabels(t *testing.T) {
+	resetState()
+
+	tmp := t.TempDir()
+	sysDir := filepath.Join(tmp, "sys")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"), "2400000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/cpufreq/scaling_cur_freq"), "2500000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/cpufreq/scaling_cur_freq"), "2600000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu10/cpufreq/scaling_cur_freq"), "3400000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu11/cpufreq/scaling_cur_freq"), "3500000\n")
+
+	cpuFreqGlob = filepath.Join(sysDir, "devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq")
+
+	nodes := readCPUClockNodes()
+	got := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		got = append(got, node.Text)
+	}
+
+	want := []string{
+		"Clock Core #00",
+		"Clock Core #01",
+		"Clock Core #02",
+		"Clock Core #10",
+		"Clock Core #11",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("labels = %#v, want %#v", got, want)
 	}
 }
 
