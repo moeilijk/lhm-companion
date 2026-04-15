@@ -20,6 +20,7 @@ var (
 	procStatPath = "/proc/stat"
 	procMeminfo  = "/proc/meminfo"
 	cpuFreqGlob  = "/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq"
+	cpuSysBase   = "/sys/devices/system/cpu"
 	netClassPath = "/sys/class/net"
 	blockClass   = "/sys/class/block"
 	now          = time.Now
@@ -33,6 +34,15 @@ type tracker struct {
 type cpuTimes struct {
 	total uint64
 	idle  uint64
+}
+
+type cpuTopology struct {
+	cpu           int
+	packageID     int
+	coreID        int
+	coreOrdinal   int
+	threadOrdinal int
+	threadCount   int
 }
 
 type netSample struct {
@@ -371,6 +381,7 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 	prev := cpuPrev
 	cpuPrev = current
 	cpuPrevMu.Unlock()
+	topology := readCPUTopology()
 
 	keys := make([]string, 0, len(current))
 	for key := range current {
@@ -387,7 +398,7 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 	})
 
 	nodes := make([]server.Node, 0, len(keys))
-	for idx, key := range keys {
+	for _, key := range keys {
 		cur := current[key]
 		usage := 0.0
 		if old, ok := prev[key]; ok && cur.total > old.total {
@@ -397,14 +408,11 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 		}
 
 		label := "CPU Total"
-		idKey := "total"
+		sensorID := "/cpu/load/total"
 		if key != "cpu" {
-			core := strings.TrimPrefix(key, "cpu")
-			label = "CPU Core #" + strconv.Itoa(cpuIndex(key)+1)
-			idKey = "core" + core
+			label, sensorID = cpuLoadMetadata(cpuIndex(key), topology)
 		}
-		min, max := trackValue("/cpu/load/"+idKey, usage)
-		sensorId := fmt.Sprintf("/cpu/load/%d", idx)
+		min, max := trackValue(sensorID, usage)
 		valStr := formatValue(usage, "%")
 		minStr := formatValue(min, "%")
 		maxStr := formatValue(max, "%")
@@ -413,7 +421,7 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 			Value:    valStr,
 			Min:      minStr,
 			Max:      maxStr,
-			SensorId: sensorId,
+			SensorId: sensorID,
 			Type:     "Load",
 			RawValue: valStr,
 			RawMin:   minStr,
@@ -429,27 +437,39 @@ func readCPUClockNodes() []server.Node {
 	sort.Slice(files, func(i, j int) bool {
 		return cpuIndex(filepath.Dir(filepath.Dir(files[i]))) < cpuIndex(filepath.Dir(filepath.Dir(files[j])))
 	})
+	topology := readCPUTopology()
+	seenCores := map[int]bool{}
 
 	nodes := make([]server.Node, 0, len(files))
-	for idx, file := range files {
+	for _, file := range files {
 		raw := readUint64(file)
 		if raw == invalidUint64 {
 			continue
 		}
 
-		core := cpuIndex(filepath.Dir(filepath.Dir(file)))
+		cpu := cpuIndex(filepath.Dir(filepath.Dir(file)))
+		label := "CPU Core #" + strconv.Itoa(cpu+1)
+		sensorID := fmt.Sprintf("/cpu/clock/core-%d", cpu+1)
+		if topo, ok := topology[cpu]; ok {
+			if seenCores[topo.coreOrdinal] {
+				continue
+			}
+			seenCores[topo.coreOrdinal] = true
+			label = "CPU Core #" + strconv.Itoa(topo.coreOrdinal)
+			sensorID = fmt.Sprintf("/cpu/clock/core-%d", topo.coreOrdinal)
+		}
+
 		value := float64(raw) / 1000.0
-		min, max := trackValue(fmt.Sprintf("/cpu/clock/core%d", core), value)
-		sensorId := fmt.Sprintf("/cpu/clock/%d", idx)
+		min, max := trackValue(sensorID, value)
 		valStr := formatValue(value, "MHz")
 		minStr := formatValue(min, "MHz")
 		maxStr := formatValue(max, "MHz")
 		nodes = append(nodes, server.Node{
-			Text:     "Core #" + strconv.Itoa(core+1),
+			Text:     label,
 			Value:    valStr,
 			Min:      minStr,
 			Max:      maxStr,
-			SensorId: sensorId,
+			SensorId: sensorID,
 			Type:     "Clock",
 			RawValue: valStr,
 			RawMin:   minStr,
@@ -458,6 +478,83 @@ func readCPUClockNodes() []server.Node {
 		})
 	}
 	return nodes
+}
+
+func cpuLoadMetadata(cpu int, topology map[int]cpuTopology) (string, string) {
+	if topo, ok := topology[cpu]; ok {
+		if topo.threadCount > 1 {
+			return fmt.Sprintf("CPU Core #%d Thread #%d", topo.coreOrdinal, topo.threadOrdinal),
+				fmt.Sprintf("/cpu/load/core-%d-thread-%d", topo.coreOrdinal, topo.threadOrdinal)
+		}
+		return "CPU Core #" + strconv.Itoa(topo.coreOrdinal),
+			fmt.Sprintf("/cpu/load/core-%d", topo.coreOrdinal)
+	}
+	return "CPU Core #" + strconv.Itoa(cpu+1), fmt.Sprintf("/cpu/load/core-%d", cpu+1)
+}
+
+func readCPUTopology() map[int]cpuTopology {
+	dirs, _ := filepath.Glob(filepath.Join(cpuSysBase, "cpu[0-9]*"))
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	entries := make([]cpuTopology, 0, len(dirs))
+	for _, dir := range dirs {
+		cpu := cpuIndex(dir)
+		if cpu == math.MaxInt32 {
+			continue
+		}
+		entries = append(entries, cpuTopology{
+			cpu:       cpu,
+			packageID: readTopologyInt(filepath.Join(dir, "topology/physical_package_id"), 0),
+			coreID:    readTopologyInt(filepath.Join(dir, "topology/core_id"), cpu),
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].packageID != entries[j].packageID {
+			return entries[i].packageID < entries[j].packageID
+		}
+		if entries[i].coreID != entries[j].coreID {
+			return entries[i].coreID < entries[j].coreID
+		}
+		return entries[i].cpu < entries[j].cpu
+	})
+
+	out := make(map[int]cpuTopology, len(entries))
+	coreOrdinal := 0
+	for i := 0; i < len(entries); {
+		j := i + 1
+		for j < len(entries) &&
+			entries[j].packageID == entries[i].packageID &&
+			entries[j].coreID == entries[i].coreID {
+			j++
+		}
+
+		coreOrdinal++
+		threadCount := j - i
+		for k := i; k < j; k++ {
+			entry := entries[k]
+			entry.coreOrdinal = coreOrdinal
+			entry.threadOrdinal = (k - i) + 1
+			entry.threadCount = threadCount
+			out[entry.cpu] = entry
+		}
+		i = j
+	}
+	return out
+}
+
+func readTopologyInt(path string, fallback int) int {
+	value := strings.TrimSpace(readFile(path))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 func readMeminfo(path string) (map[string]uint64, error) {

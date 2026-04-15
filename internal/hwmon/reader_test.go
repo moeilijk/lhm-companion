@@ -56,6 +56,33 @@ func TestReadAllUsesStableStorageAndNetworkIDs(t *testing.T) {
 	assertNoVolatileHWMonIDs(t, ids)
 }
 
+func TestReadAllNormalizesCPUCoreTempLabels(t *testing.T) {
+	resetHWMonState(t)
+
+	tmp := t.TempDir()
+	sysfsBase = filepath.Join(tmp, "class/hwmon")
+
+	createHWMonDevice(t, tmp, "hwmon0", "coretemp", "devices/platform/coretemp.0", map[string]string{
+		"temp1_input": "45000\n",
+		"temp1_label": "Package id 0\n",
+		"temp2_input": "41000\n",
+		"temp2_label": "Core 0\n",
+		"temp3_input": "42000\n",
+		"temp3_label": "Core 1\n",
+	})
+
+	labels := leafLabelsByID(ReadAll())
+	if got := labels["/cpu/temperature/1"]; got != "CPU Package" {
+		t.Fatalf("label /cpu/temperature/1 = %q, want %q", got, "CPU Package")
+	}
+	if got := labels["/cpu/temperature/2"]; got != "CPU Core #1" {
+		t.Fatalf("label /cpu/temperature/2 = %q, want %q", got, "CPU Core #1")
+	}
+	if got := labels["/cpu/temperature/3"]; got != "CPU Core #2" {
+		t.Fatalf("label /cpu/temperature/3 = %q, want %q", got, "CPU Core #2")
+	}
+}
+
 func resetHWMonState(t *testing.T) {
 	t.Helper()
 
@@ -113,6 +140,23 @@ func leafSensorIDs(nodes []server.Node) []string {
 	}
 	slices.Sort(ids)
 	return ids
+}
+
+func leafLabelsByID(nodes []server.Node) map[string]string {
+	labels := map[string]string{}
+	var walk func(server.Node)
+	walk = func(n server.Node) {
+		if n.SensorId != "" {
+			labels[n.SensorId] = n.Text
+		}
+		for _, child := range n.Children {
+			walk(child)
+		}
+	}
+	for _, node := range nodes {
+		walk(node)
+	}
+	return labels
 }
 
 func assertContainsID(t *testing.T, ids []string, want string) {

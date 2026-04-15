@@ -31,10 +31,15 @@ func TestReadAllIncludesCPUAndMemory(t *testing.T) {
 	}, "\n"))
 	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"), "2400000\n")
 	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/cpufreq/scaling_cur_freq"), "2500000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/core_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/core_id"), "1\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/physical_package_id"), "0\n")
 
 	procStatPath = filepath.Join(procDir, "stat")
 	procMeminfo = filepath.Join(procDir, "meminfo")
 	cpuFreqGlob = filepath.Join(sysDir, "devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq")
+	cpuSysBase = filepath.Join(sysDir, "devices/system/cpu")
 	netClassPath = filepath.Join(sysDir, "class/net")
 	blockClass = filepath.Join(sysDir, "class/block")
 	now = func() time.Time { return time.Unix(10, 0) }
@@ -106,16 +111,27 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	}
 }
 
-func TestBuildCPULoadNodesUseLHMLabels(t *testing.T) {
+func TestBuildCPULoadNodesUseLHMThreadLabels(t *testing.T) {
 	resetState()
 
+	tmp := t.TempDir()
+	sysDir := filepath.Join(tmp, "sys")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/core_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/core_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/topology/core_id"), "1\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu3/topology/core_id"), "1\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu3/topology/physical_package_id"), "0\n")
+	cpuSysBase = filepath.Join(sysDir, "devices/system/cpu")
+
 	current := map[string]cpuTimes{
-		"cpu":   {total: 100, idle: 50},
-		"cpu0":  {total: 100, idle: 50},
-		"cpu1":  {total: 100, idle: 50},
-		"cpu2":  {total: 100, idle: 50},
-		"cpu10": {total: 100, idle: 50},
-		"cpu11": {total: 100, idle: 50},
+		"cpu":  {total: 100, idle: 50},
+		"cpu0": {total: 100, idle: 50},
+		"cpu1": {total: 100, idle: 50},
+		"cpu2": {total: 100, idle: 50},
+		"cpu3": {total: 100, idle: 50},
 	}
 
 	nodes := buildCPULoadNodes(current)
@@ -126,18 +142,17 @@ func TestBuildCPULoadNodesUseLHMLabels(t *testing.T) {
 
 	want := []string{
 		"CPU Total",
-		"CPU Core #1",
-		"CPU Core #2",
-		"CPU Core #3",
-		"CPU Core #11",
-		"CPU Core #12",
+		"CPU Core #1 Thread #1",
+		"CPU Core #1 Thread #2",
+		"CPU Core #2 Thread #1",
+		"CPU Core #2 Thread #2",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("labels = %#v, want %#v", got, want)
 	}
 }
 
-func TestReadCPUClockNodesUseLHMLabels(t *testing.T) {
+func TestReadCPUClockNodesDeduplicateSMTSiblings(t *testing.T) {
 	resetState()
 
 	tmp := t.TempDir()
@@ -145,10 +160,18 @@ func TestReadCPUClockNodesUseLHMLabels(t *testing.T) {
 	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"), "2400000\n")
 	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/cpufreq/scaling_cur_freq"), "2500000\n")
 	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/cpufreq/scaling_cur_freq"), "2600000\n")
-	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu10/cpufreq/scaling_cur_freq"), "3400000\n")
-	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu11/cpufreq/scaling_cur_freq"), "3500000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu3/cpufreq/scaling_cur_freq"), "2700000\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/core_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu0/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/core_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu1/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/topology/core_id"), "1\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu2/topology/physical_package_id"), "0\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu3/topology/core_id"), "1\n")
+	writeFile(t, filepath.Join(sysDir, "devices/system/cpu/cpu3/topology/physical_package_id"), "0\n")
 
 	cpuFreqGlob = filepath.Join(sysDir, "devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq")
+	cpuSysBase = filepath.Join(sysDir, "devices/system/cpu")
 
 	nodes := readCPUClockNodes()
 	got := make([]string, 0, len(nodes))
@@ -157,11 +180,8 @@ func TestReadCPUClockNodesUseLHMLabels(t *testing.T) {
 	}
 
 	want := []string{
-		"Core #1",
-		"Core #2",
-		"Core #3",
-		"Core #11",
-		"Core #12",
+		"CPU Core #1",
+		"CPU Core #2",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("labels = %#v, want %#v", got, want)
@@ -188,6 +208,7 @@ func resetState() {
 	procStatPath = "/proc/stat"
 	procMeminfo = "/proc/meminfo"
 	cpuFreqGlob = "/sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq"
+	cpuSysBase = "/sys/devices/system/cpu"
 	netClassPath = "/sys/class/net"
 	blockClass = "/sys/class/block"
 	now = time.Now

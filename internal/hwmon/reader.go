@@ -32,6 +32,8 @@ var (
 var (
 	pciAddressRE    = regexp.MustCompile(`^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$`)
 	nvmeNamespaceRE = regexp.MustCompile(`^nvme[0-9]+n[0-9]+(?:p[0-9]+)?$`)
+	cpuCoreLabelRE  = regexp.MustCompile(`(?i)^core ([0-9]+)$`)
+	cpuPkgLabelRE   = regexp.MustCompile(`(?i)^package id [0-9]+$`)
 )
 
 func track(id string, val float64) (min, max float64) {
@@ -147,6 +149,7 @@ func addReadings(dir, baseID, prefix, typeName, unit string, scale float64, grou
 		if label == "" {
 			label = typeName + " " + idx
 		}
+		label = normalizeCPUHWMonLabel(baseID, typeName, label)
 
 		minRaw := readFileInt(filepath.Join(dir, prefix+idx+"_min"))
 		maxRaw := readFileInt(filepath.Join(dir, prefix+idx+"_max"))
@@ -183,6 +186,22 @@ func addReadings(dir, baseID, prefix, typeName, unit string, scale float64, grou
 			ImageURL: "images/transparent.png",
 		})
 	}
+}
+
+func normalizeCPUHWMonLabel(baseID, typeName, label string) string {
+	if baseID != "/cpu" || typeName != "Temperature" {
+		return label
+	}
+	if matches := cpuCoreLabelRE.FindStringSubmatch(label); matches != nil {
+		core, err := strconv.Atoi(matches[1])
+		if err == nil {
+			return fmt.Sprintf("CPU Core #%d", core+1)
+		}
+	}
+	if cpuPkgLabelRE.MatchString(label) {
+		return "CPU Package"
+	}
+	return label
 }
 
 func addFreqReadings(dir, baseID string, groups map[string][]server.Node) {
