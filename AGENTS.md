@@ -1,3 +1,3 @@
 # Repository Instructions
 
-- Commit and push changes before testing.
+- Commit, push, and release changes before testing.

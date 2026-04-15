@@ -386,7 +386,6 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 		return cpuIndex(keys[i]) < cpuIndex(keys[j])
 	})
 
-	coreLabelWidth := cpuCoreLabelWidth(keys)
 	nodes := make([]server.Node, 0, len(keys))
 	for idx, key := range keys {
 		cur := current[key]
@@ -397,11 +396,11 @@ func buildCPULoadNodes(current map[string]cpuTimes) []server.Node {
 			usage = percent(float64(deltaTotal-deltaIdle), float64(deltaTotal))
 		}
 
-		label := "Load (Total)"
+		label := "CPU Total"
 		idKey := "total"
 		if key != "cpu" {
 			core := strings.TrimPrefix(key, "cpu")
-			label = "Load Core #" + formatCoreIndex(core, coreLabelWidth)
+			label = "CPU Core #" + strconv.Itoa(cpuIndex(key)+1)
 			idKey = "core" + core
 		}
 		min, max := trackValue("/cpu/load/"+idKey, usage)
@@ -431,7 +430,6 @@ func readCPUClockNodes() []server.Node {
 		return cpuIndex(filepath.Dir(filepath.Dir(files[i]))) < cpuIndex(filepath.Dir(filepath.Dir(files[j])))
 	})
 
-	width := cpuClockLabelWidth(files)
 	nodes := make([]server.Node, 0, len(files))
 	for idx, file := range files {
 		raw := readUint64(file)
@@ -447,7 +445,7 @@ func readCPUClockNodes() []server.Node {
 		minStr := formatValue(min, "MHz")
 		maxStr := formatValue(max, "MHz")
 		nodes = append(nodes, server.Node{
-			Text:     "Clock Core #" + formatCoreIndex(strconv.Itoa(core), width),
+			Text:     "Core #" + strconv.Itoa(core+1),
 			Value:    valStr,
 			Min:      minStr,
 			Max:      maxStr,
@@ -460,39 +458,6 @@ func readCPUClockNodes() []server.Node {
 		})
 	}
 	return nodes
-}
-
-func cpuCoreLabelWidth(keys []string) int {
-	maxCore := 0
-	for _, key := range keys {
-		if key == "cpu" {
-			continue
-		}
-		if idx := cpuIndex(key); idx > maxCore {
-			maxCore = idx
-		}
-	}
-	return len(strconv.Itoa(maxCore))
-}
-
-func cpuClockLabelWidth(files []string) int {
-	maxCore := 0
-	for _, file := range files {
-		if idx := cpuIndex(filepath.Dir(filepath.Dir(file))); idx > maxCore {
-			maxCore = idx
-		}
-	}
-	return len(strconv.Itoa(maxCore))
-}
-
-func formatCoreIndex(core string, width int) string {
-	if width <= 1 {
-		return core
-	}
-	if n, err := strconv.Atoi(core); err == nil {
-		return fmt.Sprintf("%0*d", width, n)
-	}
-	return core
 }
 
 func readMeminfo(path string) (map[string]uint64, error) {

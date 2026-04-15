@@ -106,7 +106,7 @@ func TestReadAllIncludesNetworkAndStorageRates(t *testing.T) {
 	}
 }
 
-func TestBuildCPULoadNodesUseTypePrefixedNaturalLabels(t *testing.T) {
+func TestBuildCPULoadNodesUseLHMLabels(t *testing.T) {
 	resetState()
 
 	current := map[string]cpuTimes{
@@ -125,19 +125,19 @@ func TestBuildCPULoadNodesUseTypePrefixedNaturalLabels(t *testing.T) {
 	}
 
 	want := []string{
-		"Load (Total)",
-		"Load Core #00",
-		"Load Core #01",
-		"Load Core #02",
-		"Load Core #10",
-		"Load Core #11",
+		"CPU Total",
+		"CPU Core #1",
+		"CPU Core #2",
+		"CPU Core #3",
+		"CPU Core #11",
+		"CPU Core #12",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("labels = %#v, want %#v", got, want)
 	}
 }
 
-func TestReadCPUClockNodesUseTypePrefixedNaturalLabels(t *testing.T) {
+func TestReadCPUClockNodesUseLHMLabels(t *testing.T) {
 	resetState()
 
 	tmp := t.TempDir()
@@ -157,11 +157,11 @@ func TestReadCPUClockNodesUseTypePrefixedNaturalLabels(t *testing.T) {
 	}
 
 	want := []string{
-		"Clock Core #00",
-		"Clock Core #01",
-		"Clock Core #02",
-		"Clock Core #10",
-		"Clock Core #11",
+		"Core #1",
+		"Core #2",
+		"Core #3",
+		"Core #11",
+		"Core #12",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("labels = %#v, want %#v", got, want)

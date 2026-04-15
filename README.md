@@ -75,8 +75,8 @@ Read on every poll from `/proc` and `/sys`; no drivers or extra permissions requ
 
 | Source | Sensor type | Sensors |
 |--------|-------------|---------|
-| `/proc/stat` | Load | CPU Total, Core 0…N |
-| `/sys/…/cpufreq/scaling_cur_freq` | Clock | Core 0…N (requires `cpufreq` driver; not available in WSL) |
+| `/proc/stat` | Load | CPU Total, CPU Core #1…N |
+| `/sys/…/cpufreq/scaling_cur_freq` | Clock | Core #1…N (requires `cpufreq` driver; not available in WSL) |
 | `/proc/meminfo` | Load / Data | RAM load %, Used / Available / Total RAM, Used / Total Swap |
 | `/sys/class/net/*/statistics` | Throughput / Data / Load | Rx/Tx rate, cumulative bytes, link utilisation % (load only when link speed is known); loopback (`lo`) excluded |
 | `/sys/class/block/*/stat` | Throughput / Load / Data | Read/Write rate, I/O activity %, cumulative read/write bytes; whole disks only — partitions, loop, ram and zram devices excluded |
