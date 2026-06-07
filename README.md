@@ -4,6 +4,11 @@ Linux sensor bridge for [lhm-streamdeck](https://github.com/moeilijk/lhm-streamd
 
 Serves CPU load, memory, network, storage, hardware temperatures, fan speeds, voltages and more as a `data.json` endpoint that is fully compatible with Libre Hardware Monitor. The Stream Deck plugin connects to it as a remote source profile — no modifications to the plugin required.
 
+> **Note (v1.8.1+):** The lhm-streamdeck plugin now reads `/sys/class/hwmon` directly on native Linux ([OpenDeck](https://github.com/nekename/OpenDeck)). lhm-companion is no longer required for hardware sensor readings (temperatures, fans, voltages, clocks) when the plugin runs locally. lhm-companion is still needed for:
+> - CPU load %, RAM, network throughput and disk I/O (read from `/proc` and `/sys/class`)
+> - NVIDIA GPU readings via `nvidia-smi`
+> - Remote setups where the Windows Stream Deck plugin polls a Linux machine over HTTP
+
 ## How it works
 
 The Stream Deck plugin can poll a remote `http://host:port/data.json` endpoint. lhm-companion serves that endpoint in the exact JSON format Libre Hardware Monitor produces. Add a source profile in the plugin settings pointing to the Linux machine's IP and port; all sensor tiles will then offer that source in their dropdown.
