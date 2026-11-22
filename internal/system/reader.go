@@ -59,8 +59,11 @@ type blockSample struct {
 }
 
 var (
-	trackMu     sync.Mutex
-	tracking    = map[string]*tracker{}
+	trackMu  sync.Mutex
+	tracking = map[string]*tracker{}
+	// sensorKeys maps a SensorId to the tracker keys behind it, for the nodes
+	// whose tracker key differs from the SensorId they publish.
+	sensorKeys  = map[string]map[string]struct{}{}
 	cpuPrevMu   sync.Mutex
 	cpuPrev     = map[string]cpuTimes{}
 	netPrevMu   sync.Mutex
@@ -156,7 +159,7 @@ func readMemory() *server.Node {
 	if swapTotal > 0 {
 		swapUsed := swapTotal - minUint64(swapTotal, swapFree)
 		swapLoad := percent(float64(swapUsed), float64(swapTotal))
-		swapMin, swapMax := trackValue("/memory/load/swap", swapLoad)
+		swapMin, swapMax := trackSensorValue("/memory/load/swap", "/memory/load/1", swapLoad)
 		swapValStr := formatValue(swapLoad, "%")
 		loadNodes = append(loadNodes, server.Node{
 			Text:     "Swap",
@@ -705,7 +708,7 @@ func storageRates(name string, readBytes, writeBytes, ioMillis uint64, currentTi
 }
 
 func loadNode(id, label string, value float64, sensorID string) server.Node {
-	min, max := trackValue(id, value)
+	min, max := trackSensorValue(id, sensorID, value)
 	valStr := formatValue(value, "%")
 	minStr := formatValue(min, "%")
 	maxStr := formatValue(max, "%")
@@ -724,7 +727,7 @@ func loadNode(id, label string, value float64, sensorID string) server.Node {
 }
 
 func throughputNode(id, label string, value float64, sensorID string) server.Node {
-	min, max := trackValue(id, value)
+	min, max := trackSensorValue(id, sensorID, value)
 	valStr := formatBytes(value, true)
 	minStr := formatBytes(min, true)
 	maxStr := formatBytes(max, true)
@@ -743,7 +746,7 @@ func throughputNode(id, label string, value float64, sensorID string) server.Nod
 }
 
 func networkThroughputNode(id, label string, value float64, sensorID string) server.Node {
-	min, max := trackValue(id, value)
+	min, max := trackSensorValue(id, sensorID, value)
 	valStr := formatValue(value, "B/s")
 	minStr := formatValue(min, "B/s")
 	maxStr := formatValue(max, "B/s")
@@ -762,7 +765,7 @@ func networkThroughputNode(id, label string, value float64, sensorID string) ser
 }
 
 func dataNode(id, label string, value float64, sensorID string) server.Node {
-	min, max := trackValue(id, value)
+	min, max := trackSensorValue(id, sensorID, value)
 	valStr := formatBytes(value, false)
 	minStr := formatBytes(min, false)
 	maxStr := formatBytes(max, false)
@@ -781,7 +784,7 @@ func dataNode(id, label string, value float64, sensorID string) server.Node {
 }
 
 func networkDataNode(id, label string, value float64, sensorID string) server.Node {
-	min, max := trackValue(id, value)
+	min, max := trackSensorValue(id, sensorID, value)
 	valStr := formatValue(value, "B")
 	minStr := formatValue(min, "B")
 	maxStr := formatValue(max, "B")
@@ -951,4 +954,39 @@ func primeSamples() {
 		blockPrev = samples
 		blockPrevMu.Unlock()
 	}
+}
+
+// trackSensorValue tracks value under id and remembers that sensorID publishes it.
+func trackSensorValue(id, sensorID string, value float64) (float64, float64) {
+	if id != sensorID {
+		trackMu.Lock()
+		keys, ok := sensorKeys[sensorID]
+		if !ok {
+			keys = map[string]struct{}{}
+			sensorKeys[sensorID] = keys
+		}
+		keys[id] = struct{}{}
+		trackMu.Unlock()
+	}
+	return trackValue(id, value)
+}
+
+// ResetMinMax forgets the recorded minimum and maximum of one sensor, so the
+// next sample sets both to the current value. It reports whether the sensor
+// was known.
+func ResetMinMax(sensorID string) bool {
+	trackMu.Lock()
+	defer trackMu.Unlock()
+	found := false
+	if _, ok := tracking[sensorID]; ok {
+		delete(tracking, sensorID)
+		found = true
+	}
+	for key := range sensorKeys[sensorID] {
+		if _, ok := tracking[key]; ok {
+			delete(tracking, key)
+			found = true
+		}
+	}
+	return found
 }

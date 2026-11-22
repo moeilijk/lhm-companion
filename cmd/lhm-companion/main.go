@@ -57,9 +57,18 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("lhm-companion %s listening on %s", version, addr)
-	if err := http.ListenAndServe(addr, server.New(provide)); err != nil {
+	if err := http.ListenAndServe(addr, server.New(provide, resetMinMax)); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// resetMinMax forgets the recorded minimum and maximum of one sensor in
+// whichever reader tracks it.
+func resetMinMax(sensorID string) bool {
+	system := system.ResetMinMax(sensorID)
+	hw := hwmon.ResetMinMax(sensorID)
+	nv := nvidia.ResetMinMax(sensorID)
+	return system || hw || nv
 }
 
 func envInt(key string, def int) int {

@@ -263,3 +263,31 @@ func leafNodesByID(nodes []server.Node) map[string]server.Node {
 	}
 	return leaves
 }
+
+func TestResetMinMaxRestartsTracking(t *testing.T) {
+	// The SensorId is the tracker key.
+	const direct = "/test/reset/load/0"
+	trackValue(direct, 10)
+	trackValue(direct, 90)
+	if !ResetMinMax(direct) {
+		t.Fatal("known sensor reported as unknown")
+	}
+	if min, max := trackValue(direct, 50); min != 50 || max != 50 {
+		t.Fatalf("after reset: %v..%v, want 50..50", min, max)
+	}
+
+	// The node publishes a SensorId that differs from its tracker key.
+	loadNode("/test/reset/load/rx", "Receive", 10, "/test/reset/load/7")
+	loadNode("/test/reset/load/rx", "Receive", 90, "/test/reset/load/7")
+	if !ResetMinMax("/test/reset/load/7") {
+		t.Fatal("sensor behind a different tracker key reported as unknown")
+	}
+	node := loadNode("/test/reset/load/rx", "Receive", 50, "/test/reset/load/7")
+	if node.Min != node.Value || node.Max != node.Value {
+		t.Fatalf("after reset: min %q max %q value %q", node.Min, node.Max, node.Value)
+	}
+
+	if ResetMinMax("/test/reset/never-seen") {
+		t.Fatal("unknown sensor reported as known")
+	}
+}

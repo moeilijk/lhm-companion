@@ -201,3 +201,16 @@ func fmtVal(v float64, unit string) string {
 	}
 	return s
 }
+
+// ResetMinMax forgets the recorded minimum and maximum of one sensor, so the
+// next sample sets both to the current value. It reports whether the sensor
+// was known.
+func ResetMinMax(sensorID string) bool {
+	trackMu.Lock()
+	defer trackMu.Unlock()
+	if _, ok := tracking[sensorID]; !ok {
+		return false
+	}
+	delete(tracking, sensorID)
+	return true
+}

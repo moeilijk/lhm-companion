@@ -13,6 +13,8 @@ Serves CPU load, memory, network, storage, hardware temperatures, fan speeds, vo
 
 The Stream Deck plugin can poll a remote `http://host:port/data.json` endpoint. lhm-companion serves that endpoint in the exact JSON format Libre Hardware Monitor produces. Add a source profile in the plugin settings pointing to the Linux machine's IP and port; all sensor tiles will then offer that source in their dropdown.
 
+lhm-companion records the minimum and maximum of every sensor since it started. `POST /Sensor?action=ResetMinMax&id=<SensorId>` resets them for one sensor, the same way Libre Hardware Monitor does. The reply is `{"result":"ok"}`, or `{"result":"fail","message":"..."}` for an unknown sensor.
+
 ## Requirements
 
 - Linux (any modern distro — kernel ≥ 4.x)
