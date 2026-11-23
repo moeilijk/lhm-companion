@@ -2,4 +2,4 @@ module github.com/moeilijk/lhm-companion
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.11
